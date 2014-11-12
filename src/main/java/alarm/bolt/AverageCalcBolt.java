@@ -1,5 +1,10 @@
 package main.java.alarm.bolt;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.GregorianCalendar;
@@ -23,7 +28,6 @@ import backtype.storm.tuple.Values;
 public class AverageCalcBolt implements IRichBolt {
 	private static final long serialVersionUID = 1L;
 	public static final int MAX_SIZE = 10;
-	private List<Integer> measurements = new ArrayList<Integer>();
 	public OutputCollector _collector;
 	private static final Logger log = LoggerFactory.getLogger(AverageCalcBolt.class);
     private boolean latency;
@@ -41,12 +45,12 @@ public class AverageCalcBolt implements IRichBolt {
 	public void execute(Tuple input) {
 		Integer key = input.getIntegerByField("key");
 		Event event = (Event) input.getValue(input.fieldIndex("event"));
-        int value = event.getValue();
+        String value = event.getValue();
         long startTime = event.getTimestamp();
-		addMeasurement(value);
         Long timestamp = new GregorianCalendar().getTimeInMillis();
-        Event average = new Event(calcAverage(), value, timestamp);
-        _collector.emit(new Values(average));
+        String parsedLine = this.parseLine(value);
+        //Curl to influxdb
+        curlToInfluxDB(parsedLine);
         if(latency) {
             long latency = timestamp - startTime;
             log.info("AckSent;" + latency);
@@ -65,19 +69,49 @@ public class AverageCalcBolt implements IRichBolt {
 
 	@Override
 	public Map<String, Object> getComponentConfiguration() { return null; }
-
-	private void addMeasurement(Integer measurement) {
-		if (measurements.size() == MAX_SIZE) {
-			measurements.remove(0);
-		}
-		measurements.add(measurement);
-	}
 	
-	private int calcAverage() {
-		int average = 0;
-		for (int measurement : measurements) {
-			average += measurement;
-		}
-		return average/measurements.size();
+	private String parseLine(String line) {
+        try {
+            String[] splittedLine = line.substring(line.indexOf(" ")+1).split(" ");
+            return arrayToString(splittedLine);
+        }catch (Exception e) {
+            log.error("Line not compatible " + e.getMessage());
+        }
+        return "";
 	}
+
+    private String arrayToString(String[] splittedLine) {
+        String result = "[";
+        for (String i: splittedLine) {
+            result +='"' + i + '"' + ",";
+        }
+        result = result.substring(result.length()-1);
+        result += "]";
+        return result;
+    }
+
+    private void curlToInfluxDB(String line) {
+        HttpURLConnection httpcon;
+		try {
+			httpcon = (HttpURLConnection) ((new URL("10.1.0.13").openConnection()));
+			httpcon.setDoOutput(true);
+	        httpcon.setRequestProperty("Content-Type", "application/json");
+	        httpcon.setRequestProperty("Accept", "application/json");
+	        httpcon.setRequestMethod("POST");
+	        httpcon.connect();
+
+	        byte[] outputBytes = ("[{'name' : 'files', 'columns' : ['user', 'file', 'type'], 'points' : [" + line + "]]}]").getBytes("UTF-8");
+	        OutputStream os = httpcon.getOutputStream();
+	        os.write(outputBytes);
+
+	        os.close();
+
+		} catch (MalformedURLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+    }
 }

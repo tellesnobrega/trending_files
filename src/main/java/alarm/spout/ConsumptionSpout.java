@@ -55,15 +55,14 @@ public class ConsumptionSpout implements IRichSpout {
 		int key = rand.nextInt(10);
         int userId = rand.nextInt(50);
         int fileId = rand.nextInt(100);
-        String[] action = {"created", "opened"}
-        String value = "user " + userId + " " + action[rand.nextInt(2)] + " " + fileId;
+        String[] action = {"created", "updated", "viewed"};
+        String value = "user " + userId + " " + action[rand.nextInt(action.length)] + " " + fileId;
         Long timestamp = new GregorianCalendar().getTimeInMillis();
         Event event = new Event(value, timestamp);
         String id = key+";"+value;
 		_collector.emit(new Values(key, event));
 		if(!latency) {
-            String output = "EventSent";
-    		log.info(output);
+    		log.info("EventSent");
         }
 	}
 
