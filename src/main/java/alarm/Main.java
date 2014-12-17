@@ -5,8 +5,7 @@ import backtype.storm.StormSubmitter;
 import backtype.storm.topology.TopologyBuilder;
 import backtype.storm.tuple.Fields;
 import backtype.storm.utils.Utils;
-import main.java.alarm.bolt.AlarmBolt;
-import main.java.alarm.bolt.AverageCalcBolt;
+import main.java.alarm.bolt.AddToDB;
 import main.java.alarm.spout.ConsumptionSpout;
 
 public class Main {
@@ -33,14 +32,13 @@ public class Main {
 
 		TopologyBuilder builder = new TopologyBuilder();
 		builder.setSpout("source", new ConsumptionSpout(messagesPerSecond, latency), spouts);
-		builder.setBolt("average", new AverageCalcBolt(latency), bolts).setNumTasks(tasks).fieldsGrouping("source", new Fields("key"));
-		builder.setBolt("main/alarm", new AlarmBolt()).shuffleGrouping("average");
+		builder.setBolt("average", new AddToDB(latency), bolts).setNumTasks(tasks).fieldsGrouping("source", new Fields("key"));
 
 		Config conf = new Config();
 		conf.put(Config.TOPOLOGY_DEBUG, false);
 		conf.setNumWorkers(7);
 
-		StormSubmitter.submitTopology("sg-app-storm", conf, builder.createTopology());
+		StormSubmitter.submitTopology("trending-files", conf, builder.createTopology());
 		
 	}
 	

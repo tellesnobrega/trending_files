@@ -25,14 +25,14 @@ import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Tuple;
 import backtype.storm.tuple.Values;
 
-public class AverageCalcBolt implements IRichBolt {
+public class AddToDB implements IRichBolt {
 	private static final long serialVersionUID = 1L;
 	public static final int MAX_SIZE = 10;
 	public OutputCollector _collector;
-	private static final Logger log = LoggerFactory.getLogger(AverageCalcBolt.class);
+	private static final Logger log = LoggerFactory.getLogger(AddToDB.class);
     private boolean latency;
 
-    public AverageCalcBolt(boolean latency) {
+    public AddToDB(boolean latency) {
         this.latency = latency;
     }
 
@@ -85,33 +85,20 @@ public class AverageCalcBolt implements IRichBolt {
         for (String i: splittedLine) {
             result +='"' + i + '"' + ",";
         }
-        result = result.substring(result.length()-1);
+        result = result.substring(0,result.length()-1);
         result += "]";
         return result;
     }
 
     private void curlToInfluxDB(String line) {
-        HttpURLConnection httpcon;
-		try {
-			httpcon = (HttpURLConnection) ((new URL("10.1.0.13").openConnection()));
-			httpcon.setDoOutput(true);
-	        httpcon.setRequestProperty("Content-Type", "application/json");
-	        httpcon.setRequestProperty("Accept", "application/json");
-	        httpcon.setRequestMethod("POST");
-	        httpcon.connect();
+        String[] command = {"curl", "-X", "POST", "-d", "[{\"name\" : \"files\", \"columns\" : [\"userid\", \"action\", \"fileid\"], \"points\" : [" + line + "] } ]", "http://10.1.0.13:8086/db/trendfiles/series?u=root&p=root"};
+        log.info(arrayToString(command));
+        try {
+            Process pb = Runtime.getRuntime().exec(command);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
 
-	        byte[] outputBytes = ("[{'name' : 'files', 'columns' : ['user', 'file', 'type'], 'points' : [" + line + "]]}]").getBytes("UTF-8");
-	        OutputStream os = httpcon.getOutputStream();
-	        os.write(outputBytes);
-
-	        os.close();
-
-		} catch (MalformedURLException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
     }
 }
